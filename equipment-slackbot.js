@@ -23,7 +23,7 @@ https.get("https://slack.com/api/rtm.start?token=" + config.slack_api_token,
                       " config.json");
     }).on('end', function() {
         rtm = JSON.parse(data);
-        var channelId = null;
+        var mainChannelId = null;
         ws = new _ws(rtm.url);
         slackId = rtm.self.id;
 
@@ -38,17 +38,17 @@ https.get("https://slack.com/api/rtm.start?token=" + config.slack_api_token,
         {
             if (rtm.channels[i].name == config.channel_name) 
             {
-                channelId = rtm.channels[i].id;
+                mainChannelId = rtm.channels[i].id;
                 break;
             }
         }
          
-        if (channelId != null)
+        if (mainChannelId != null)
         {
             console.log("Found " + config.channel_name + " channel with ID " + 
-                          channelId);
+                          mainChannelId);
             ws.on('open', function() {
-                joinChannel(rtm.team.name, channelId);
+                handleMessages(mainChannelId);
             });
         } 
         else
@@ -74,7 +74,7 @@ function getUserById(id) {
     return null;
 }
 
-function joinChannel(teamName, channelID) {
+function handleMessages(mainChannelId) {
 
     console.log("Listening for new messages...");
 
@@ -83,14 +83,15 @@ function joinChannel(teamName, channelID) {
         if(event.type === "message" && event.user !== slackId) {
 
             var text = event.text.toLowerCase();
-            var response = parseRequest(text, event.user); 
+            var allowmod = (event.channel == mainChannelId);
+            var response = parseRequest(text, event.user, allowmod);
 
             if (response != null)
             {
                 ws.send(JSON.stringify({
                   "id": counter,
                   "type": "message",
-                  "channel": channelID,
+                  "channel": event.channel,
                   "text": response
                 }))
                 counter++;
@@ -269,7 +270,7 @@ function listEquipment() {
 }
 
 
-function parseRequest(request, userid) {
+function parseRequest(request, userid, allowmod) {
     if (request.search("help") >= 0)
     {
         return "help - this screen\n" +
@@ -306,6 +307,9 @@ function parseRequest(request, userid) {
     }
     else if (request.search("create") >= 0)
     {
+        if (!allowmod)
+            return "create not allowed in this channel";
+
         name = getWordAfter(request, "create");
         if (name != null)
         {
@@ -314,6 +318,9 @@ function parseRequest(request, userid) {
     }
     else if (request.search("delete") >= 0)
     {
+        if (!allowmod)
+            return "delete not allowed in this channel";
+
         name = getWordAfter(request, "delete");
         if (name != null)
         {
