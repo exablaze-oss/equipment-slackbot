@@ -1,0 +1,20 @@
+{
+  "name": "equipment-slackbot",
+  "version": "1.0.0",
+  "description": "Manage shared equipment resources.",
+  "contributors": [
+    {
+      "name": "David Mann",
+      "email": "david.mann@exablaze.com",
+      "url": "https://exablaze.com"
+    }
+  ],
+  "license": "BSD",
+  "dependencies": {
+    "ws": "*",
+    "jsonfile": "*"
+  },
+  "scripts": {
+    "start": "node equipment-slackbot.js"
+  }
+}
