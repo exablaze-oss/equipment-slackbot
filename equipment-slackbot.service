@@ -1,0 +1,15 @@
+# an example systemd service file for equipment-slackbot
+
+[Service]
+WorkingDirectory=/data/equipment-slackbot/
+ExecStart=/usr/bin/npm start
+Restart=always
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=equipment-slackbot
+User=nobody
+Group=nobody
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
