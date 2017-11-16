@@ -10,16 +10,16 @@ var equipment;
 var file = 'equipment.json';
 var counter = 0;
 var rtm;
-var config = jsonfile.readFileSync("config.json"); 
+var config = jsonfile.readFileSync("config.json");
 
-https.get("https://slack.com/api/rtm.start?token=" + config.slack_api_token, 
+https.get("https://slack.com/api/rtm.start?token=" + config.slack_api_token,
   function(res) {
     console.log("Connecting to Slack...");
     var data = "";
     res.on('data', function(chunk) {
         data += chunk;
     }).on('error', function(err) {
-        console.log("Couldn't connect to slack - check your API token in " + 
+        console.log("Couldn't connect to slack - check your API token in " +
                       " config.json");
     }).on('end', function() {
         rtm = JSON.parse(data);
@@ -28,7 +28,7 @@ https.get("https://slack.com/api/rtm.start?token=" + config.slack_api_token,
         slackId = rtm.self.id;
 
         try {
-            equipment = jsonfile.readFileSync(file); 
+            equipment = jsonfile.readFileSync(file);
         } catch (err) {
             equipment = [];
         }
@@ -36,21 +36,21 @@ https.get("https://slack.com/api/rtm.start?token=" + config.slack_api_token,
         console.log("Logging into " + rtm.team.name + "'s Slack...");
         for (var i = 0; i < rtm.channels.length; i++)
         {
-            if (rtm.channels[i].name == config.channel_name) 
+            if (rtm.channels[i].name == config.channel_name)
             {
                 mainChannelId = rtm.channels[i].id;
                 break;
             }
         }
-         
+
         if (mainChannelId != null)
         {
-            console.log("Found " + config.channel_name + " channel with ID " + 
+            console.log("Found " + config.channel_name + " channel with ID " +
                           mainChannelId);
             ws.on('open', function() {
                 handleMessages(mainChannelId);
             });
-        } 
+        }
         else
         {
             console.log("Couldn't find channel " + config.channel_name + ".");
@@ -154,7 +154,7 @@ function checkoutEquipment(name, userid) {
     {
         if (equipment[id].user != null)
         {
-            return getUserById(equipment[id].user).name + " is using " + name + 
+            return getUserById(equipment[id].user).name + " is using " + name +
                     " ask them first!";
         }
         else
@@ -163,7 +163,12 @@ function checkoutEquipment(name, userid) {
             equipment[id].user = userid;
             equipment[id].checkout = (new Date()).getTime();
             jsonfile.writeFileSync(file, equipment);
-            return "Checked out " + name + " for user " + user.name;
+            var reply = "Checked out " + name + " for user " + user.name + "\n";
+            if (equipment[id].note != null)
+            {
+                reply = reply + "Notes:\n" + equipment[id].note;
+            }
+            return reply;
         }
     }
 
@@ -176,15 +181,15 @@ function releaseEquipment(name) {
     {
         if (equipment[id].user == null)
         {
-            return "Noone is using " + name + "!"; 
+            return "Noone is using " + name + "!";
         }
         else
         {
             var old_userid = equipment[id].user;
             equipment[id].user = null;
             jsonfile.writeFileSync(file, equipment);
-            return "Released " + name + " (was being used by " + 
-                getUserById(old_userid).name + " for " + 
+            return "Released " + name + " (was being used by " +
+                getUserById(old_userid).name + " for " +
                   elapsedTimeInHours(equipment[id].checkout) + " hours)";
         }
     }
@@ -213,6 +218,50 @@ function deleteEquipment(name) {
     return name + " doesn't exist!";
 }
 
+
+function addEquipmentNote(name, note) {
+    var id = findEquipment(name);
+    if (id != null)
+    {
+        if( equipment[id].note == null )
+            equipment[id].note = note;
+        else
+            equipment[id].note = equipment[id].note + "\n" + note;
+        jsonfile.writeFileSync(file, equipment);
+        return "Added note " + note + " to equipment " + name;
+    }
+    else
+    {
+        return "Equipment " + name + " not found!";
+    }
+}
+
+function showEquipmentNote(name) {
+    var id = findEquipment(name);
+    if (id != null)
+    {
+        return equipment[id].name + ": " + equipment[id].note;
+    }
+    else
+    {
+        return "Equipment " + name + " not found!";
+    }
+}
+
+function clearEquipmentNote(name) {
+    var id = findEquipment(name);
+    if (id != null)
+    {
+        equipment[id].note = null;
+        jsonfile.writeFileSync(file, equipment);
+        return "Cleared notes from " + name;
+    }
+    else
+    {
+        return "Equipment " + name + " not found!";
+    }
+}
+
 function elapsedTimeInHours(oldtime) {
     var d = new Date();
     var diff = d.getTime() - oldtime;
@@ -228,7 +277,7 @@ function listEquipment() {
         {
             return 1;
         }
-        if (a.name < b.name) 
+        if (a.name < b.name)
         {
             return -1;
         }
@@ -240,7 +289,7 @@ function listEquipment() {
 
     if (equipment.length == null || equipment.length === 0)
     {
-        return "There's no equipments!";
+        return "There's no equipment!";
     }
 
     for (var i = 0; i < equipment.length; i++)
@@ -248,8 +297,8 @@ function listEquipment() {
         reply = reply + "  " + equipment[i].name;
         if (equipment[i].user != null)
         {
-            reply = reply + " (in use by " + 
-                getUserById(equipment[i].user).name; 
+            reply = reply + " (in use by " +
+                getUserById(equipment[i].user).name;
             if (equipment[i].checkout != null)
             {
                 reply = reply + " for " +
@@ -269,9 +318,45 @@ function listEquipment() {
     return "Here's the stuff I know about:\n" + reply;
 }
 
+function listEquipmentNotes() {
+    equipment.sort(function(a,b) {
+        if (a.name > b.name)
+        {
+            return 1;
+        }
+        if (a.name < b.name)
+        {
+            return -1;
+        }
+
+        return 0;
+    });
+
+    var reply = "";
+
+    if (equipment.length == null || equipment.length === 0)
+    {
+        return "There's no equipment!";
+    }
+
+    for (var i = 0; i < equipment.length; i++)
+    {
+        reply = reply + "  " + equipment[i].name;
+        if (equipment[i].note != null)
+        {
+            reply = reply + " - " + equipment[i].note + "\n";
+        }
+        else
+        {
+            reply = reply + " - no notes.\n";
+        }
+    }
+
+    return "Here's the stuff I know about:\n" + reply;
+}
 
 function parseRequest(request, userid, allowmod) {
-    if (request.search("help") >= 0)
+    if (request.search("help") == 0)
     {
         return "help - this screen\n" +
           "using <name> - is anyone using the thing with <name>\n" +
@@ -279,9 +364,15 @@ function parseRequest(request, userid, allowmod) {
           "release <name> - release a piece of equipment for use.\n" +
           "create <name> - create a new equipment entry\n" +
           "delete <name> - delete an existing equipment entry\n" +
-          "list - list all the equipment and who is using it\n";
+          "list - list all the equipment and who is using it\n" +
+          "add_note <name> <note> - add to the <note> for equipment <name>\n" +
+          "show_note <name> - show the note for equipment <name>\n" +
+          "clear_note <name> - clear the note for equipment <name>\n" +
+          "list_notes - list all equipment and notes about the equipment\n" +
+          "\n" +
+          "Please note commands must be at the start of a message.\n";
     }
-    else if (request.search("using") >= 0)
+    else if (request.search("using") == 0)
     {
         name = getWordAfter(request, "using");
         if (name != null)
@@ -289,7 +380,7 @@ function parseRequest(request, userid, allowmod) {
             return usingEquipment(name);
         }
     }
-    else if (request.search("checkout") >= 0) 
+    else if (request.search("checkout") == 0)
     {
         name = getWordAfter(request, "checkout");
         if (name != null)
@@ -297,7 +388,7 @@ function parseRequest(request, userid, allowmod) {
             return checkoutEquipment(name, userid);
         }
     }
-    else if (request.search("release") >= 0)
+    else if (request.search("release") == 0)
     {
         name = getWordAfter(request, "release");
         if (name != null)
@@ -305,7 +396,7 @@ function parseRequest(request, userid, allowmod) {
             return releaseEquipment(name, userid);
         }
     }
-    else if (request.search("create") >= 0)
+    else if (request.search("create") == 0)
     {
         if (!allowmod)
             return "create not allowed in this channel";
@@ -316,7 +407,7 @@ function parseRequest(request, userid, allowmod) {
             return createEquipment(name);
         }
     }
-    else if (request.search("delete") >= 0)
+    else if (request.search("delete") == 0)
     {
         if (!allowmod)
             return "delete not allowed in this channel";
@@ -327,7 +418,42 @@ function parseRequest(request, userid, allowmod) {
             return deleteEquipment(name);
         }
     }
-    else if (request.search("list") >= 0)
+    else if (request.search("add_note") == 0)
+    {
+        if (!allowmod)
+            return "editing not allowed in this channel";
+
+        name = getWordAfter(request, "add_note");
+        if (name != null)
+        {
+            var note = request.substr(request.indexOf(name) + name.length);
+            return addEquipmentNote(name, note);
+        }
+    }
+    else if (request.search("show_note") == 0)
+    {
+        name = getWordAfter(request, "show_note");
+        if (name != null)
+        {
+            return showEquipmentNote(name);
+        }
+    }
+    else if (request.search("clear_note") == 0)
+    {
+        if (!allowmod)
+            return "editing not allowed in this channel";
+
+        name = getWordAfter(request, "clear_note");
+        if (name != null)
+        {
+            return clearEquipmentNote(name);
+        }
+    }
+    else if (request.search("list_notes") == 0)
+    {
+        return listEquipmentNotes();
+    }
+    else if (request.search("list") == 0)
     {
         return listEquipment();
     }
