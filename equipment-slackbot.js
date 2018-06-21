@@ -7,7 +7,9 @@ var  _ws = require('ws');
 var jsonfile = require('jsonfile');
 var ws, slackId;
 var equipment;
+var staffNumbers;
 var file = 'equipment.json';
+var phone_numbers_file = 'phone_numbers_file.json';
 var counter = 0;
 var rtm;
 var config = jsonfile.readFileSync("config.json");
@@ -31,6 +33,12 @@ https.get("https://slack.com/api/rtm.start?token=" + config.slack_api_token,
             equipment = jsonfile.readFileSync(file);
         } catch (err) {
             equipment = [];
+        }
+
+        try {
+            staffNumbers = jsonfile.readFileSync(phone_numbers_file);
+        } catch (err) {
+            staffNumbers = [];
         }
 
         console.log("Logging into " + rtm.team.name + "'s Slack...");
@@ -80,7 +88,7 @@ function handleMessages(mainChannelId) {
 
     ws.on('message', function(data) {
         var event = JSON.parse(data);
-        if(event.type === "message" && event.user !== slackId) {
+        if(event.type === "message" && event.user !== slackId && event.text != null) {
 
             var text = event.text.toLowerCase();
             var allowmod = (event.channel == mainChannelId);
@@ -355,22 +363,114 @@ function listEquipmentNotes() {
     return "Here's the stuff I know about:\n" + reply;
 }
 
+function findStaff(userid) {
+    for (var i = 0; i < staffNumbers.length; i++)
+    {
+        if (staffNumbers[i].userid == userid)
+        {
+            return i;
+        }
+    }
+    return null;
+}
+
+function addStaffPhoneNumber(userid, number) {
+    var user = getUserById(userid);
+    var idx = findStaff(userid);
+    if (idx == null)
+    {
+        staffNumbers.push({ "name": user.name, "number": number, "userid": userid});
+        jsonfile.writeFileSync(phone_numbers_file, staffNumbers);
+        return "Created staff " + user.name + " with number " + number;
+    }
+    else //update existing
+    {
+        staffNumbers[idx].name = user.name;
+        if (staffNumbers[idx].number == null)
+            staffNumbers[idx].number = number;
+        else
+            staffNumbers[idx].number = staffNumbers[idx].number +"; " + number;
+        staffNumbers[idx].userid = userid;
+        jsonfile.writeFileSync(phone_numbers_file, staffNumbers);
+        return "Updated number " + number + " for staff " + user.name;
+    }
+}
+
+function clearStaffPhoneNumber(userid) {
+    var user = getUserById(userid);
+    var idx = findStaff(userid);
+    if (idx != null)
+    {
+        staffNumbers[idx].number = null;
+        jsonfile.writeFileSync(phone_numbers_file, staffNumbers);
+        return "Cleared number for " + user.name;
+    }
+    else
+    {
+        return "Staff " + user.name + " not found!";
+    }
+}
+
+function listStaffPhoneNumbers() {
+    staffNumbers.sort(function(a,b) {
+        if (a.name > b.name)
+        {
+            return 1;
+        }
+        if (a.name < b.name)
+        {
+            return -1;
+        }
+        return 0;
+    });
+
+    var reply = "";
+
+    if (staffNumbers.length == null || staffNumbers.length === 0)
+    {
+        return "There's no staff numbers!";
+    }
+
+    for (var i = 0; i < staffNumbers.length; i++)
+    {
+        reply = reply + "  " + staffNumbers[i].name;
+        if (staffNumbers[i].number != null)
+        {
+            reply = reply + ":  " + staffNumbers[i].number + "\n";
+        }
+        else
+        {
+            reply = reply + " - no number.\n";
+        }
+    }
+
+    return "Here's the people I know about:\n" + reply;
+}
+
 function parseRequest(request, userid, allowmod) {
     if (request.search("help") == 0)
     {
         return "help - this screen\n" +
-          "using <name> - is anyone using the thing with <name>\n" +
-          "checkout <name> - reserve equipment <name> for your use\n" +
-          "release <name> - release a piece of equipment for use.\n" +
-          "create <name> - create a new equipment entry\n" +
-          "delete <name> - delete an existing equipment entry\n" +
-          "list - list all the equipment and who is using it\n" +
-          "add_note <name> <note> - add to the <note> for equipment <name>\n" +
-          "show_note <name> - show the note for equipment <name>\n" +
-          "clear_note <name> - clear the note for equipment <name>\n" +
-          "list_notes - list all equipment and notes about the equipment\n" +
-          "\n" +
-          "Please note commands must be at the start of a message.\n";
+            "EQUIPMENT:\n" +
+            "using <name> - is anyone using the thing with <name>\n" +
+            "checkout <name> - reserve equipment <name> for your use\n" +
+            "release <name> - release a piece of equipment for use.\n" +
+            "create <name> - create a new equipment entry\n" +
+            "delete <name> - delete an existing equipment entry\n" +
+            "list - list all the equipment and who is using it\n" +
+            "\n" +
+            "EQUIPMENT NOTES:\n" +
+            "add_note <name> <note> - add to the <note> for equipment <name>\n" +
+            "show_note <name> - show the note for equipment <name>\n" +
+            "clear_note <name> - clear the note for equipment <name>\n" +
+            "list_notes - list all equipment and notes about the equipment\n" +
+            "\n" +
+            "PHONE NUMBERS:\n" +
+            "add_my_number <phone_number> - add the <phone_number> for the user\n" +
+            "clear_my_number - clear the phone number for the user\n" +
+            "list_phone_numbers - list all recorded user phone numbers\n" +
+            "\n" +
+            "Please note commands must be at the start of a message.\n";
     }
     else if (request.search("using") == 0)
     {
@@ -452,6 +552,25 @@ function parseRequest(request, userid, allowmod) {
     else if (request.search("list_notes") == 0)
     {
         return listEquipmentNotes();
+    }
+    else if (request.search("add_my_number") == 0)
+    {
+        if (!allowmod)
+            return "editing not allowed in this channel";
+
+        phone_number = getWordAfter(request, "add_my_number");
+        return addStaffPhoneNumber(userid, phone_number);
+    }
+    else if (request.search("clear_my_number") == 0)
+    {
+        if (!allowmod)
+            return "editing not allowed in this channel";
+
+        return clearStaffPhoneNumber(userid);
+    }
+    else if ((request.search("list_phone_numbers") == 0) || (request.search("list_numbers") == 0))
+    {
+        return listStaffPhoneNumbers();
     }
     else if (request.search("list") == 0)
     {

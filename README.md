@@ -28,9 +28,15 @@ Use varations of:
 * `create <name>` to create a piece of equipment called `<name>`
 * `delete <name>` to delete `<name>` from the list
 * `list` to list all equipment
+* ``
 * `set_note <name> <note>` to apply the <note> for equipment `<name>`
 * `show_note <name>` to show the note for equipment `<name>`
 * `clear_note <name>` to clear the note for equipment `<name>`
 * `list_notes` to list all notes for all equipment
+* ``
+* `add_my_number <phone_number>` to add a phone number for the user
+* `clear_my_number <name>` to clear the phone numbers for the user
+* `list_phone_numbers` or `list_numbers` to list all recorded user phone numbers
 
 Equipment entries are stored persistently in equipment.json.
+Phone entries are stored persistently in phone_numbers.json.
